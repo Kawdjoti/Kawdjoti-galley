@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Album": {
+      "title": "Album",
+      "description": "A collection of images",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the album" },
+        "description": { "type": "string", "description": "A short description of the album" },
+        "coverImageUrl": { "type": "string", "description": "Optional cover image URL" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string", "description": "The owner of the album" }
+      },
+      "required": ["name", "userId", "createdAt"]
+    },
+    "Image": {
+      "title": "Image",
+      "description": "An image with metadata",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "albumId": { "type": "string" },
+        "category": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["url", "userId", "createdAt", "albumId"]
+    }
+  },
+  "firestore": {
+    "/albums/{albumId}": {
+      "schema": "Album",
+      "description": "User albums"
+    },
+    "/images/{imageId}": {
+      "schema": "Image",
+      "description": "Images stored in the gallery"
+    }
+  }
+}

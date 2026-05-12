@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // 4. Validation Helpers
+    function isValidAlbum(data) {
+      return data.keys().hasAll(['name', 'userId', 'createdAt']) &&
+             data.keys().size() <= 5 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.userId == request.auth.uid &&
+             data.createdAt == request.time &&
+             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 500)) &&
+             (!data.keys().hasAny(['coverImageUrl']) || (data.coverImageUrl is string && data.coverImageUrl.size() <= 1048576));
+    }
+
+    function isValidImage(data) {
+      return data.keys().hasAll(['url', 'userId', 'createdAt', 'albumId']) &&
+             data.keys().size() <= 8 &&
+             data.url is string && data.url.size() > 0 && data.url.size() <= 1048576 &&
+             data.userId == request.auth.uid &&
+             data.albumId is string &&
+             data.createdAt == request.time &&
+             (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() <= 100)) &&
+             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 1000)) &&
+             (!data.keys().hasAny(['category']) || (data.category is string && data.category.size() <= 50));
+    }
+
+    // 1. Albums
+    match /albums/{albumId} {
+      allow get: if isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isEmailVerified() && 
+                    isValidId(albumId) && 
+                    isValidAlbum(incoming());
+                    
+      allow update: if isEmailVerified() && 
+                    isOwner(existing().userId) && 
+                    isValidAlbum(incoming()) &&
+                    incoming().userId == existing().userId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'coverImageUrl']);
+                    
+      allow delete: if isEmailVerified() && isOwner(existing().userId);
+    }
+
+    // 2. Images
+    match /images/{imageId} {
+      allow get: if isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isEmailVerified() && 
+                    isValidId(imageId) && 
+                    // Verify album existence and ownership efficiently
+                    get(/databases/$(database)/documents/albums/$(incoming().albumId)).data.userId == request.auth.uid &&
+                    isValidImage(incoming());
+
+      allow update: if isEmailVerified() && 
+                    isOwner(existing().userId) && 
+                    isValidImage(incoming()) &&
+                    incoming().userId == existing().userId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().albumId == existing().albumId &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'url', 'category']);
+
+      allow delete: if isEmailVerified() && isOwner(existing().userId);
+    }
+  }
+}
