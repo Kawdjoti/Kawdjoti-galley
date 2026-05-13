@@ -21,7 +21,7 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: User;
-  mode: 'album' | 'image';
+  mode: 'album' | 'photo';
   albumId: string | null;
 }
 
@@ -39,11 +39,17 @@ export default function UploadModal({ isOpen, onClose, user, mode, albumId }: Up
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [isDragging, setIsDragging] = useState(false);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
+    handleProcessFile(selectedFile);
+  };
+
+  const handleProcessFile = (selectedFile: File | undefined | null) => {
     if (selectedFile) {
-      if (selectedFile.size > 10 * 1024 * 1024) { // 10MB limit for raw selection
-        toast.error('File too large. Please select an image under 10MB.');
+      if (selectedFile.size > 15 * 1024 * 1024) { // 15MB limit for raw selection
+        toast.error('File too large. Please select an image under 15MB.');
         return;
       }
       setFile(selectedFile);
@@ -53,6 +59,22 @@ export default function UploadModal({ isOpen, onClose, user, mode, albumId }: Up
       };
       reader.readAsDataURL(selectedFile);
     }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files?.[0];
+    handleProcessFile(droppedFile);
   };
 
   const clearFile = () => {
@@ -69,42 +91,50 @@ export default function UploadModal({ isOpen, onClose, user, mode, albumId }: Up
       let imageUrl = formData.url || formData.coverImageUrl;
 
       if (file) {
-        toast.info('Processing image...', { duration: 1000 });
-        imageUrl = await compressImage(file);
+        toast.info('Analyzing visual data...', { duration: 2000 });
+        try {
+          imageUrl = await compressImage(file);
+        } catch (compressionError) {
+          throw new Error(`Compression failed: ${compressionError instanceof Error ? compressionError.message : 'Unknown reason'}`);
+        }
       }
 
-      if (!imageUrl && mode === 'image') {
-        toast.error('Please select an image or provide a URL.');
+      if (!imageUrl && mode === 'photo') {
+        toast.error('Source reference missing. Please select an image or provide a URL.');
         setLoading(false);
         return;
       }
 
+      const userId = user.uid;
+      const createdAt = serverTimestamp();
+
       if (mode === 'album') {
         await addDoc(collection(db, 'albums'), {
-          name: formData.name,
-          description: formData.description,
-          coverImageUrl: imageUrl || `https://picsum.photos/seed/${formData.name}/800/600`,
-          userId: user.uid,
-          createdAt: serverTimestamp()
+          name: formData.name || 'Untitled Collection',
+          description: formData.description || '',
+          coverImageUrl: imageUrl || `https://picsum.photos/seed/${formData.name || Date.now()}/800/600`,
+          userId,
+          createdAt
         });
-        toast.success('Collection Archived');
+        toast.success('Archive: Collection Successfully Curated');
       } else {
-        if (!albumId) throw new Error('No album selected');
-        await addDoc(collection(db, 'images'), {
-          title: formData.title,
-          description: formData.description,
+        if (!albumId) throw new Error('Target archive not identified (No album selected).');
+        await addDoc(collection(db, 'photos'), {
+          title: formData.title || 'Untitled Object',
+          description: formData.description || '',
           url: imageUrl,
-          category: formData.category,
           albumId,
-          userId: user.uid,
-          createdAt: serverTimestamp()
+          userId,
+          createdAt
         });
-        toast.success('Object Successfully Archived');
+        toast.success('Archive: Object Successfully Documented');
       }
       
       handleClose();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, mode === 'album' ? 'albums' : 'images');
+      const errorMessage = error instanceof Error ? error.message : 'Storage protocol violation';
+      toast.error(`Archival Error: ${errorMessage}`);
+      handleFirestoreError(error, OperationType.CREATE, mode === 'album' ? 'albums' : 'photos');
     } finally {
       setLoading(false);
     }
@@ -150,7 +180,10 @@ export default function UploadModal({ isOpen, onClose, user, mode, albumId }: Up
             ) : (
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-stone-200 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-black/20 hover:bg-black/[0.02] transition-all"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${isDragging ? 'border-black bg-black/[0.05]' : 'border-stone-200 hover:border-black/20 hover:bg-black/[0.02]'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center mb-3">
                   <Upload className="w-4 h-4 text-stone-400" />
@@ -229,29 +262,16 @@ export default function UploadModal({ isOpen, onClose, user, mode, albumId }: Up
                   className="rounded-lg border-black/5 bg-white h-12 text-sm"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-60">Genre</Label>
-                  <Input 
-                    id="category" 
-                    name="category" 
-                    placeholder="Portrait" 
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    className="rounded-lg border-black/5 bg-white h-12 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-60">Coordinates</Label>
-                  <Input 
-                    id="description" 
-                    name="description" 
-                    placeholder="Location/Metadata" 
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    className="rounded-lg border-black/5 bg-white h-12 text-sm"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-60">Coordinates / Metadata</Label>
+                <Input 
+                  id="description" 
+                  name="description" 
+                  placeholder="Location/Metadata" 
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  className="rounded-lg border-black/5 bg-white h-12 text-sm"
+                />
               </div>
             </>
           )}

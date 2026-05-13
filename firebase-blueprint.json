@@ -13,16 +13,15 @@
       },
       "required": ["name", "userId", "createdAt"]
     },
-    "Image": {
-      "title": "Image",
-      "description": "An image with metadata",
+    "Photo": {
+      "title": "Photo",
+      "description": "A photo with metadata stored as base64",
       "type": "object",
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "url": { "type": "string" },
+        "url": { "type": "string", "description": "Base64 encoded image data" },
         "albumId": { "type": "string" },
-        "category": { "type": "string" },
         "userId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -34,9 +33,9 @@
       "schema": "Album",
       "description": "User albums"
     },
-    "/images/{imageId}": {
-      "schema": "Image",
-      "description": "Images stored in the gallery"
+    "/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Photos stored in the archive"
     }
   }
 }

@@ -28,18 +28,18 @@ export default function AlbumList({ albums, onSelect }: AlbumListProps) {
       <div className="border border-dashed border-black/10 rounded-[2rem] p-20 text-center">
         <Folder className="w-12 h-12 mx-auto mb-4 opacity-10" />
         <h3 className="text-xl font-medium serif text-black/60">No Collections Yet</h3>
-        <p className="text-sm font-sans text-black/40 mt-2">Start by creating your first album to organize your images.</p>
+        <p className="text-sm font-sans text-black/40 mt-2">Start by creating your first collection to organize your archive.</p>
       </div>
     );
   }
 
   const handleDeleteAlbum = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this album? All images within it will stay but become orphaned if not handled. (Note: Simple implementation)')) return;
+    if (!confirm('Are you sure you want to delete this collection? All objects within it will be orphaned. (Note: Simple implementation)')) return;
     
     try {
       await deleteDoc(doc(db, 'albums', id));
-      toast.success('Album removed');
+      toast.success('Collection removed');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `albums/${id}`);
     }

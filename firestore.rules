@@ -34,24 +34,23 @@ service cloud.firestore {
     // 4. Validation Helpers
     function isValidAlbum(data) {
       return data.keys().hasAll(['name', 'userId', 'createdAt']) &&
-             data.keys().size() <= 5 &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.keys().size() <= 7 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.userId == request.auth.uid &&
              data.createdAt == request.time &&
-             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 500)) &&
+             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 2000)) &&
              (!data.keys().hasAny(['coverImageUrl']) || (data.coverImageUrl is string && data.coverImageUrl.size() <= 1048576));
     }
 
-    function isValidImage(data) {
+    function isValidPhoto(data) {
       return data.keys().hasAll(['url', 'userId', 'createdAt', 'albumId']) &&
-             data.keys().size() <= 8 &&
+             data.keys().size() <= 9 &&
              data.url is string && data.url.size() > 0 && data.url.size() <= 1048576 &&
              data.userId == request.auth.uid &&
              data.albumId is string &&
              data.createdAt == request.time &&
-             (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() <= 100)) &&
-             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 1000)) &&
-             (!data.keys().hasAny(['category']) || (data.category is string && data.category.size() <= 50));
+             (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() <= 500)) &&
+             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 5000));
     }
 
     // 1. Albums
@@ -59,40 +58,35 @@ service cloud.firestore {
       allow get: if isOwner(existing().userId);
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       
-      allow create: if isEmailVerified() && 
-                    isValidId(albumId) && 
-                    isValidAlbum(incoming());
+      allow create: if isSignedIn() && isValidAlbum(incoming());
                     
-      allow update: if isEmailVerified() && 
-                    isOwner(existing().userId) && 
+      allow update: if isOwner(existing().userId) && 
                     isValidAlbum(incoming()) &&
                     incoming().userId == existing().userId &&
                     incoming().createdAt == existing().createdAt &&
                     incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'coverImageUrl']);
                     
-      allow delete: if isEmailVerified() && isOwner(existing().userId);
+      allow delete: if isOwner(existing().userId);
     }
 
-    // 2. Images
-    match /images/{imageId} {
+    // 2. Photos
+    match /photos/{photoId} {
       allow get: if isOwner(existing().userId);
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       
-      allow create: if isEmailVerified() && 
-                    isValidId(imageId) && 
-                    // Verify album existence and ownership efficiently
+      allow create: if isSignedIn() && 
+                    // Verify album ownership
                     get(/databases/$(database)/documents/albums/$(incoming().albumId)).data.userId == request.auth.uid &&
-                    isValidImage(incoming());
+                    isValidPhoto(incoming());
 
-      allow update: if isEmailVerified() && 
-                    isOwner(existing().userId) && 
-                    isValidImage(incoming()) &&
+      allow update: if isOwner(existing().userId) && 
+                    isValidPhoto(incoming()) &&
                     incoming().userId == existing().userId &&
                     incoming().createdAt == existing().createdAt &&
                     incoming().albumId == existing().albumId &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'url', 'category']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'url']);
 
-      allow delete: if isEmailVerified() && isOwner(existing().userId);
+      allow delete: if isOwner(existing().userId);
     }
   }
 }

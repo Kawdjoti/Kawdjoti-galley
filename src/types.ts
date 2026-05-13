@@ -7,15 +7,14 @@ export interface Album {
   userId: string;
 }
 
-export interface GalleryImage {
+export interface Photo {
   id: string;
   title?: string;
   description?: string;
   url: string;
   albumId: string;
-  category?: string;
   userId: string;
   createdAt: any;
 }
 
-export type ViewState = 'albums' | 'images';
+export type ViewState = 'albums' | 'photos';

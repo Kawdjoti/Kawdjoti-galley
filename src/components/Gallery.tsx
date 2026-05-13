@@ -10,13 +10,13 @@ import {
   doc
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Album, GalleryImage, ViewState } from '../types';
+import { Album, Photo, ViewState } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, ChevronLeft, Image as ImageIcon, FolderPlus, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 import AlbumList from './AlbumList';
-import ImageGrid from './ImageGrid';
+import PhotoGrid from './PhotoGrid';
 import UploadModal from './UploadModal';
 
 interface GalleryProps {
@@ -26,17 +26,16 @@ interface GalleryProps {
 export default function Gallery({ user }: GalleryProps) {
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [images, setImages] = useState<GalleryImage[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [uploadMode, setUploadMode] = useState<'album' | 'image'>('album');
+  const [uploadMode, setUploadMode] = useState<'album' | 'photo'>('album');
   const [loading, setLoading] = useState(true);
 
   // Sync Albums
   useEffect(() => {
     const q = query(
       collection(db, 'albums'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -44,6 +43,14 @@ export default function Gallery({ user }: GalleryProps) {
         id: doc.id,
         ...doc.data()
       } as Album));
+
+      // In-memory sort
+      albumData.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeB - timeA;
+      });
+
       setAlbums(albumData);
       setLoading(false);
       // Auto-select first album if none selected
@@ -57,28 +64,35 @@ export default function Gallery({ user }: GalleryProps) {
     return () => unsubscribe();
   }, [user.uid]);
 
-  // Sync Images for selected album
+  // Sync Photos for selected album
   useEffect(() => {
     if (!selectedAlbumId) {
-      setImages([]);
+      setPhotos([]);
       return;
     }
 
     const q = query(
-      collection(db, 'images'),
+      collection(db, 'photos'),
       where('albumId', '==', selectedAlbumId),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const imageData = snapshot.docs.map(doc => ({
+      const photoData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as GalleryImage));
-      setImages(imageData);
+      } as Photo));
+      
+      // Perform sorting in-memory to avoid manual FireStore indexes
+      photoData.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeB - timeA;
+      });
+
+      setPhotos(photoData);
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'images');
+      handleFirestoreError(error, OperationType.GET, 'photos');
     });
 
     return () => unsubscribe();
@@ -158,14 +172,22 @@ export default function Gallery({ user }: GalleryProps) {
                   {currentAlbum?.name || 'Your Archive'}
                 </h2>
                 <p className="text-xs uppercase tracking-[0.2em] text-stone-400 font-bold">
-                  {images.length} Objects • Series: {currentAlbum?.description || 'Personal Collection'}
+                  {photos.length} Objects • Series: {currentAlbum?.description || 'Personal Collection'}
                 </p>
               </motion.div>
             </AnimatePresence>
 
             <div className="flex gap-4">
               <Button 
-                onClick={() => { setUploadMode('image'); setIsUploadOpen(true); }}
+                onClick={() => { 
+                  if (albums.length === 0) {
+                    toast.error('Extract a new collection first to archive objects.');
+                    setUploadMode('album');
+                  } else {
+                    setUploadMode('photo');
+                  }
+                  setIsUploadOpen(true); 
+                }}
                 className="bg-black text-white px-8 h-12 rounded-full text-[10px] font-bold uppercase tracking-[0.25em] hover:bg-neutral-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -180,8 +202,8 @@ export default function Gallery({ user }: GalleryProps) {
                 <div className="w-5 h-5 border border-black border-t-white rounded-full animate-spin" />
               </div>
             ) : selectedAlbumId ? (
-              <ImageGrid 
-                images={images} 
+              <PhotoGrid 
+                photos={photos} 
                 albumId={selectedAlbumId} 
               />
             ) : (

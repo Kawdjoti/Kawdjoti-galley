@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GalleryImage } from '../types';
+import { Photo } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ImageIcon, Maximize2, Trash2, X, Download } from 'lucide-react';
 import { deleteDoc, doc } from 'firebase/firestore';
@@ -7,15 +7,15 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 
-interface ImageGridProps {
-  images: GalleryImage[];
+interface PhotoGridProps {
+  photos: Photo[];
   albumId: string;
 }
 
-export default function ImageGrid({ images, albumId }: ImageGridProps) {
-  const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null);
+export default function PhotoGrid({ photos, albumId }: PhotoGridProps) {
+  const [selectedImage, setSelectedImage] = useState<Photo | null>(null);
 
-  if (images.length === 0) {
+  if (photos.length === 0) {
     return (
       <div className="border border-dashed border-black/10 rounded-[2rem] p-20 text-center">
         <ImageIcon className="w-12 h-12 mx-auto mb-4 opacity-10" />
@@ -27,21 +27,21 @@ export default function ImageGrid({ images, albumId }: ImageGridProps) {
 
   const handleDeleteImage = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm('Permanently remove this image from your collection?')) return;
+    if (!confirm('Permanently remove this object from your collection?')) return;
     
     try {
-      await deleteDoc(doc(db, 'images', id));
-      toast.success('Image removed');
+      await deleteDoc(doc(db, 'photos', id));
+      toast.success('Object removed from archive');
       if (selectedImage?.id === id) setSelectedImage(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `images/${id}`);
+      handleFirestoreError(error, OperationType.DELETE, `photos/${id}`);
     }
   };
 
   return (
     <div className="space-y-12 pb-12">
       <div className="columns-1 sm:columns-2 lg:columns-3 gap-8 space-y-8">
-        {images.map((image, index) => (
+        {photos.map((image, index) => (
           <motion.div
             key={image.id}
             initial={{ opacity: 0, y: 30 }}
@@ -70,17 +70,17 @@ export default function ImageGrid({ images, albumId }: ImageGridProps) {
                   </button>
                 </div>
                 <div className="translate-y-[10px] group-hover:translate-y-0 transition-transform duration-500">
-                  <p className="text-[10px] uppercase tracking-[0.2em] opacity-80 mb-1 font-bold">{image.category || 'Untitled'}</p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] opacity-80 mb-1 font-bold">Archive Reference</p>
                   <h4 className="font-serif italic text-2xl drop-shadow-md">{image.title || 'Visual Record'}</h4>
                 </div>
               </div>
             </div>
             <div className="mt-4 flex justify-between items-end px-2">
               <div>
-                <p className="text-[10px] uppercase tracking-widest font-bold opacity-30">Series: Nordic</p>
-                <p className="text-xs font-serif italic opacity-60">Archive ID: {image.id.slice(0, 8)}</p>
+                <p className="text-[10px] uppercase tracking-widest font-bold opacity-30">Archive ID: {image.id.slice(0, 8)}</p>
+                <p className="text-xs font-serif italic opacity-60">Status: Documented</p>
               </div>
-              <p className="text-[10px] opacity-20">2023</p>
+              <p className="text-[10px] opacity-20">{(image.createdAt?.toDate?.() || new Date(image.createdAt)).getFullYear()}</p>
             </div>
           </motion.div>
         ))}
